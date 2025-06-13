@@ -1,42 +1,56 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
+import os
 
 app = Flask(__name__)
 
-# Function to connect to the SQLite database
-def get_db():
-    conn = sqlite3.connect('expenses.db')
-    conn.row_factory = sqlite3.Row  # To return rows as dictionaries
-    return conn
+DB_NAME = 'expenses.db'
 
-@app.route('/')
+# Create table if not exists
+def init_db():
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                category TEXT NOT NULL,
+                amount REAL NOT NULL
+            )
+        ''')
+        conn.commit()
+
+@app.route("/")
 def index():
-    return render_template('index.html')
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM expenses ORDER BY date DESC")
+        expenses = cursor.fetchall()
+    return render_template("index.html", expenses=expenses)
 
-if __name__ == '__main__':
-    app.run(debug=True)
-
-@app.route('/add-expense', methods=['POST'])
+@app.route("/add", methods=["POST"])
 def add_expense():
-    description = request.form['description']
-    amount = request.form['amount']
-    conn = get_db()
-    conn.execute("INSERT INTO expenses (description, amount) VALUES (?, ?)", (description, amount))
-    conn.commit()
-    return jsonify({"message": "Expense added successfully!"}), 201
+    date = request.form["date"]
+    category = request.form["category"]
+    amount = request.form["amount"]
 
-@app.route('/expenses', methods=['GET'])
-def get_expenses():
-    conn = get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM expenses ORDER BY created_at DESC")
-    expenses = cur.fetchall()
-    return jsonify([dict(expense) for expense in expenses])  # Converts rows to dictionaries
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO expenses (date, category, amount) VALUES (?, ?, ?)",
+                       (date, category, amount))
+        conn.commit()
 
-@app.route('/delete-expense/<int:id>', methods=['DELETE'])
-def delete_expense(id):
-    conn = get_db()
-    conn.execute("DELETE FROM expenses WHERE id = ?", (id,))
-    conn.commit()
-    return jsonify({"message": f"Expense {id} deleted successfully!"}), 200
+    return redirect(url_for("index"))
+
+@app.route("/delete/<int:expense_id>")
+def delete_expense(expense_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+        conn.commit()
+    return redirect(url_for("index"))
+
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True)
 
