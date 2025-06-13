@@ -5,9 +5,6 @@ import os
 import os
 
 # TEMP FIX: delete old DB file on startup
-DB_NAME = "expenses.db"
-if os.path.exists(DB_NAME):
-    os.remove(DB_NAME)
 
 app = Flask(__name__)
 
